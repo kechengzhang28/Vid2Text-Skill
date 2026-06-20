@@ -43,3 +43,11 @@ class Cache:
         for sub in ("audio", "text"):
             for p in (self.root / sub).glob("*"):
                 p.unlink()
+
+    def audio_path(self, video_id: str, ext: str) -> pathlib.Path:
+        return self.root / "audio" / f"{video_id}.{ext}"
+
+    def find_audio(self, video_id: str) -> pathlib.Path | None:
+        for p in (self.root / "audio").glob(f"{video_id}.*"):
+            return p
+        return None
