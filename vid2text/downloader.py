@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import re
 import urllib.parse
@@ -10,6 +11,10 @@ from vid2text import utils
 from vid2text.cache import Cache
 
 _BILI = re.compile(r"BV[0-9A-Za-z]{10}")
+
+
+def _hash_url(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:16]
 
 
 def extract_video_id(url: str) -> str:
@@ -23,7 +28,7 @@ def extract_video_id(url: str) -> str:
         q = urllib.parse.parse_qs(parsed.query)
         if "v" in q:
             return q["v"][0]
-    raise utils.UserError(f"无法识别 video_id: {url}")
+    return _hash_url(url)
 
 
 def download(url: str, *, cache: Cache, cache_root: pathlib.Path) -> utils.DownloadResult:
@@ -43,7 +48,13 @@ def download(url: str, *, cache: Cache, cache_root: pathlib.Path) -> utils.Downl
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
+            ydl_id: str = info.get("id") or video_id
             ext: str = info.get("ext") or "wav"
+            if ydl_id != video_id:
+                src = pathlib.Path(cache_root) / "audio" / f"{ydl_id}.{ext}"
+                dst = pathlib.Path(cache_root) / "audio" / f"{video_id}.{ext}"
+                if src.exists():
+                    src.rename(dst)
             audio_path = cache.audio_path(video_id, ext)
             duration = float(info.get("duration") or 0)
             return utils.DownloadResult(
