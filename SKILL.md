@@ -1,3 +1,8 @@
+---
+name: "vid2text"
+description: "从视频链接下载音频并完成语音转文字，基于 yt-dlp + FunASR。支持 B站/YouTube 等。当用户要求转写视频、提取视频文字、生成字幕时调用。"
+---
+
 # Vid2Text Skill — 视频语音转文字
 
 ## 1. 能力描述
