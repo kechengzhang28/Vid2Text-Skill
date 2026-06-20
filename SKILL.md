@@ -2,7 +2,7 @@
 
 ## 1. 能力描述
 
-从视频链接（B站、YouTube 等）下载音频流并完成高准确率语音转文字，支持中文和多语言场景。
+从视频链接（B站、YouTube 等）下载音频流并完成高准确率语音转文字，基于 yt-dlp + FunASR，覆盖绝大部分主流视频平台。
 
 ## 2. 触发场景
 
@@ -38,9 +38,7 @@ vid2text run <url> [OPTIONS]
 | `-m, --model` | `paraformer` \| `sensevoice` | `paraformer` | 选择 ASR 模型 |
 | `-f, --format` | `txt` \| `json` | `txt` | 输出格式 |
 | `-o, --output` | PATH | — | 输出文件路径（不指定则输出到 STDOUT） |
-| `-l, --language` | `auto` \| `zh` \| `en` \| `ja` \| `ko` \| `yue` | `auto` | 期望语言（`auto` 为自动检测） |
-| `--no-cache` | flag | `False` | 跳过缓存读取（仍会写入新结果覆盖） |
-| `-v, --verbose` | count | 0 | `-v`=DEBUG，`-vv`=TRACE |
+| `--no-cache` | flag | `False` | 跳过缓存读写 |
 
 ### 4.2 `vid2text transcribe <audio_file>` — 转写本地音频
 
@@ -53,13 +51,12 @@ vid2text transcribe <audio_file> [OPTIONS]
 | `-m, --model` | `paraformer` \| `sensevoice` | `paraformer` | 选择 ASR 模型 |
 | `-f, --format` | `txt` \| `json` | `txt` | 输出格式 |
 | `-o, --output` | PATH | — | 输出文件路径 |
-| `-l, --language` | `auto` \| `zh` \| `en` \| `ja` \| `ko` \| `yue` | `auto` | 期望语言 |
-| `--no-cache` | flag | `False` | 跳过缓存读取 |
+| `--no-cache` | flag | `False` | 跳过缓存读写 |
 
 ### 4.3 `vid2text cache` — 缓存管理
 
 ```
-vid2text cache list     # 列出所有缓存条目
+vid2text cache list     # 列出所有文本缓存条目
 vid2text cache clear    # 清空所有缓存
 ```
 
@@ -116,9 +113,15 @@ vid2text cache clear    # 清空所有缓存
 | 1 | 用户输入错误（URL 无效、文件不存在、参数非法、未知模型） | 向用户报告具体错误，请用户修正输入 |
 | 2 | 系统错误（依赖未安装、下载/转码/识别失败） | 检查环境：ffmpeg 是否安装、网络是否可达，向用户报告 |
 
-### 5.5 活性反馈
+### 5.5 技术栈
 
-转写过程中会通过 tqdm 进度条显示进度。长视频转写可能持续数分钟，Agent 不应因超时过早终止。使用 `-vv` 可透传底层工具原始输出辅助判断是否卡死。
+| 层 | 技术 | 用途 |
+|----|------|------|
+| 视频下载 | yt-dlp | 从视频链接提取最优音频流，覆盖数百个平台 |
+| 音频转码 | ffmpeg | 转码为 16kHz 单声道 WAV |
+| 语音识别 | FunASR（阿里达摩院） | 非自回归端到端识别，Paraformer-Large / SenseVoice-Small |
+| CLI 框架 | click | 命令行接口与参数解析 |
+| 缓存 | 文件系统（hash/video_id 命名） | 两层 Key：音频按 video_id、文本按 {hash}-{model} |
 
 ## 6. 典型用法
 
@@ -148,9 +151,8 @@ vid2text cache clear    # 清空所有缓存
   2. 或用 -o 指定文件，从文件读取 JSON
 
 场景 D：长视频（>30 分钟）
-  1. 使用 -v 或 -vv 获取更多进度信息
-  2. Agent 应给予更长的超时时间（10-30 分钟）
-  3. 考虑使用 --no-cache 确保不读过期缓存
+  1. Agent 应给予更长的超时时间（10-30 分钟）
+  2. 考虑使用 --no-cache 确保不读过期缓存
 
 场景 E：用户切换模型重新转写
   1. 直接换 -m 参数调用，缓存 Key 含模型别名，不会串结果
@@ -170,7 +172,7 @@ vid2text cache clear    # 清空所有缓存
 | **本地运行** | 所有处理在本地完成，视频只下载音频流（不下载视频轨道） |
 | **模型首次下载** | 首次使用某一模型时会自动从 ModelScope 下载（~1-2GB），需等待 |
 | **长视频** | 建议 Agent 为长视频（>30 分钟）设置 10-30 分钟超时 |
-| **平台限制** | 支持的视频平台取决于 yt-dlp（覆盖绝大部分主流平台） |
+| **平台限制** | 基于 yt-dlp，覆盖绝大部分主流视频平台（B站、YouTube、Twitch、Twitter/X 等） |
 | **网络依赖** | 下载视频和首次拉取模型需要网络，转写和缓存命中则不需要 |
 | **并发** | 同一缓存目录不支持并发写入 |
 | **隐私** | 下载的音频和转写结果仅存储在本地 `~/.vid2text/cache/` 中 |

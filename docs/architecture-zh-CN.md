@@ -4,7 +4,7 @@
 
 ## 1. 概述
 
-Vid2Text-Skill 从视频链接下载音频并完成本地语音转文字，以 `.skill` 文件分发供 AI Agent 调用。
+Vid2Text-Skill 从视频链接下载音频并完成本地语音转文字，基于 yt-dlp 覆盖绝大部分主流视频平台。以 `.skill` 文件分发供 AI Agent 调用。
 
 **核心目标**：零 API 依赖、Agent 优先的输出契约、默认容错。
 
