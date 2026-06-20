@@ -45,9 +45,9 @@ def resolve_model(alias: str) -> ModelSpec:
 
 
 def _load_auto_model(spec: ModelSpec) -> typing.Any:  # pyright: ignore[reportExplicitAny]
-    from funasr import AutoModel  # pyright: ignore[reportUnknownVariableType, reportMissingImports]
+    from funasr import AutoModel
 
-    return AutoModel(model=spec.asr_id, vad_kwargs={"max_single_segment_time": 60000})  # pyright: ignore[reportUnknownVariableType]
+    return AutoModel(model=spec.asr_id, vad_kwargs={"max_single_segment_time": 60000})
 
 
 def _result_from_output(
@@ -99,7 +99,7 @@ def recognize(
 
     try:
         model = _load_auto_model(spec)
-        output: list[dict[str, typing.Any]] = model.generate(input=str(audio_path))  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        output: list[dict[str, typing.Any]] = model.generate(input=str(audio_path))
     except Exception as e:
         raise utils.ModelError(f"ASR 识别失败: {e}") from e
 

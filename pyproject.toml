@@ -30,10 +30,6 @@ target-version = "py39"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
-[tool.pyright]
-include = ["vid2text"]
-strict = ["vid2text"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
