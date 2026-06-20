@@ -4,7 +4,7 @@
 
 ## 1. Overview
 
-Vid2Text-Skill downloads audio from video URLs and transcribes it via on-device ASR. Distributed as a `.skill` file for AI Agents.
+Vid2Text-Skill downloads audio from video URLs and transcribes it via on-device ASR, powered by yt-dlp covering most major video platforms. Distributed as a `.skill` file for AI Agents.
 
 **Core goals**: zero API dependency, Agent-first output contract, tolerance by default.
 

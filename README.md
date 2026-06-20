@@ -2,7 +2,7 @@
 
 **Languages**: [中文](README-zh-CN.md)
 
-A CLI tool that downloads audio from video URLs and transcribes it via on-device ASR. Packaged as a `.skill` for AI Agents.
+A CLI tool that downloads audio from video URLs and transcribes it via on-device ASR. Packaged as a `.skill` for AI Agents. Powered by yt-dlp, covering most major video platforms.
 
 ## Features
 
@@ -15,11 +15,30 @@ A CLI tool that downloads audio from video URLs and transcribes it via on-device
 
 ## Quick Start
 
+### Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| Video Download | yt-dlp | Extract optimal audio stream from hundreds of video platforms |
+| Audio Transcoding | ffmpeg | Transcode to 16kHz mono WAV |
+| Speech Recognition | FunASR (Alibaba DAMO Academy) | Paraformer-Large / SenseVoice-Small dual models |
+| CLI | click | Command-line interface and argument parsing |
+| Cache | Filesystem | Two-level keys: audio by video_id, text by hash+model |
+
+### Prerequisites
+
+- Python >= 3.9
+- [ffmpeg](https://ffmpeg.org/) (must be available in PATH)
+
+The default model downloads from ModelScope on first use.
+
+### Installation
+
 ```bash
 pip install -e ".[dev]"
 ```
 
-Requires Python >= 3.9 and [ffmpeg](https://ffmpeg.org/) (in PATH). The default model downloads from ModelScope on first use.
+### Basic Usage
 
 ```bash
 # Download + transcribe

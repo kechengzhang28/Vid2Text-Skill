@@ -2,7 +2,7 @@
 
 **Languages**: [English](README.md)
 
-从视频链接下载音频并完成本地语音转文字的 CLI 工具，以 `.skill` 文件分发供 AI Agent 调用。
+从视频链接下载音频并完成本地语音转文字的 CLI 工具，以 `.skill` 文件分发供 AI Agent 调用。基于 yt-dlp，覆盖绝大部分主流视频平台。
 
 ## 核心功能
 
@@ -15,11 +15,30 @@
 
 ## 快速开始
 
+### 技术栈
+
+| 层 | 技术 | 用途 |
+|----|------|------|
+| 视频下载 | yt-dlp | 提取最优音频流，覆盖数百个视频平台 |
+| 音频转码 | ffmpeg | 转码为 16kHz 单声道 WAV |
+| 语音识别 | FunASR（阿里达摩院） | Paraformer-Large / SenseVoice-Small 双模型 |
+| CLI | click | 命令行接口与参数解析 |
+| 缓存 | 文件系统 | 两层 Key：音频按 video_id、文本按 hash+model |
+
+### 先决条件
+
+- Python >= 3.9
+- [ffmpeg](https://ffmpeg.org/)（需在 PATH 中可用）
+
+默认模型首次使用时从 ModelScope 自动下载。
+
+### 安装
+
 ```bash
 pip install -e ".[dev]"
 ```
 
-需要 Python >= 3.9 和 [ffmpeg](https://ffmpeg.org/)（需在 PATH）。默认模型首次使用时从 ModelScope 自动下载。
+### 基本用法
 
 ```bash
 # 下载 + 转写
