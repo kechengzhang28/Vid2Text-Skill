@@ -1,0 +1,11 @@
+{
+  "include": ["vid2text"],
+  "typeCheckingMode": "strict",
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportArgumentType": "none",
+  "reportAttributeAccessIssue": "none"
+}

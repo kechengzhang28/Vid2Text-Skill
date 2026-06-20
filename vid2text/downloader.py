@@ -36,13 +36,13 @@ def download(url: str, *, cache: Cache, cache_root: pathlib.Path) -> utils.Downl
             duration_sec=0.0,
         )
     try:
-        ydl_opts = {  # pyright: ignore[reportUnknownVariableType]
+        ydl_opts = {
             "format": "bestaudio/best",
             "outtmpl": str(cache_root / "audio" / "%(id)s.%(ext)s"),
             "quiet": True,
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # pyright: ignore[reportArgumentType]
-            info = ydl.extract_info(url, download=True)  # pyright: ignore[reportAssignmentType]
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
             ext: str = info.get("ext") or "wav"
             audio_path = cache.audio_path(video_id, ext)
             duration = float(info.get("duration") or 0)
@@ -51,5 +51,5 @@ def download(url: str, *, cache: Cache, cache_root: pathlib.Path) -> utils.Downl
                 audio_path=pathlib.Path(audio_path),
                 duration_sec=duration,
             )
-    except yt_dlp.utils.DownloadError as e:  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
+    except yt_dlp.utils.DownloadError as e:
         raise utils.DependencyError(f"下载失败: {e}") from e
