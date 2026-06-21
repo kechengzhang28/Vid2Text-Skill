@@ -333,7 +333,7 @@ STDOUT: "[0.54-3.78] 甚至出现交易几乎停滞的情况。"
 | Linux x64 | `bin/linux-x64/sense-voice` | ~300KB |
 | Windows x64 | `bin/win-x64/sense-voice.exe` | ~300KB |
 
-编译流程：`git clone → cmake → make`，从 [lovemefan/SenseVoice.cpp](https://github.com/lovemefan/SenseVoice.cpp) 源码编译。
+编译流程：`git clone → cmake -DBUILD_SHARED_LIBS=OFF → make`，从 [lovemefan/SenseVoice.cpp](https://github.com/lovemefan/SenseVoice.cpp) 源码静态编译。
 
 #### 线程数配置
 
