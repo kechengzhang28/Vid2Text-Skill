@@ -1,6 +1,8 @@
 import sys
 import types
 
+import pytest
+
 from vid2text import asr
 
 
@@ -34,3 +36,32 @@ def test_ensure_models_downloads_and_loads_once(monkeypatch):
     assert calls["download"] == 3
     assert calls["load"] == 3
     assert set(asr._models.keys()) == {"paraformer", "vad", "punc"}
+
+
+from unittest.mock import MagicMock
+
+from vid2text.errors import ModelError
+
+
+def test_transcribe_paraformer_then_punc(tmp_path, monkeypatch):
+    monkeypatch.setattr(asr, "_models", {})
+    para = MagicMock(return_value=[{"preds": ("你好世界", ["你好", "世界"])}])
+    punc = MagicMock(return_value=("你好世界。", ["。"]))
+    monkeypatch.setattr(asr, "_ensure_models", lambda: None)
+    monkeypatch.setitem(asr._models, "paraformer", para)
+    monkeypatch.setitem(asr._models, "punc", punc)
+
+    text = asr.transcribe(tmp_path / "a.wav")
+
+    assert text == "你好世界。"
+    para.assert_called_once()
+    punc.assert_called_once_with("你好世界")
+
+
+def test_transcribe_inference_error_wrapped(tmp_path, monkeypatch):
+    monkeypatch.setattr(asr, "_models", {})
+    para = MagicMock(side_effect=RuntimeError("boom"))
+    monkeypatch.setattr(asr, "_ensure_models", lambda: None)
+    monkeypatch.setitem(asr._models, "paraformer", para)
+    with pytest.raises(ModelError):
+        asr.transcribe(tmp_path / "a.wav")

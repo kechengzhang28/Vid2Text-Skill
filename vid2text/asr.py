@@ -36,3 +36,21 @@ def _ensure_models() -> None:
         _models["punc"] = CT_Transformer(punc_dir)
     except Exception as e:
         raise ModelError(f"模型加载失败: {e}") from e
+
+
+def transcribe(wav_path: Path) -> str:
+    _ensure_models()
+    try:
+        result = _models["paraformer"]([str(wav_path)])
+        parts = []
+        for item in result:
+            if isinstance(item, dict) and "preds" in item:
+                pred = item["preds"]
+                parts.append(pred[0] if isinstance(pred, tuple) else pred)
+            else:
+                parts.append(str(item))
+        raw = "".join(parts)
+        text, _ = _models["punc"](raw)
+        return text.strip()
+    except Exception as e:
+        raise ModelError(f"ASR 推理失败: {e}") from e
