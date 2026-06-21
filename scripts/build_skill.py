@@ -11,7 +11,6 @@ SKILL_MD = ROOT / "SKILL.md"
 PYPROJECT = ROOT / "pyproject.toml"
 BIN = ROOT / "bin"
 MODELS = ROOT / "models"
-FFMPEG = ROOT / "ffmpeg"
 DIST = ROOT / "dist"
 
 _MODEL_FILE = "sense-voice-small-q4_k.gguf"
@@ -54,13 +53,6 @@ def build() -> Path:
             for binary in arch_bin_dir.iterdir():
                 if binary.is_file():
                     zf.write(binary, f"bin/{arch_dir}/{binary.name}")
-
-        if FFMPEG.exists():
-            for platform_dir in FFMPEG.iterdir():
-                if platform_dir.is_dir():
-                    for binary in platform_dir.iterdir():
-                        if binary.is_file():
-                            zf.write(binary, f"ffmpeg/{platform_dir.name}/{binary.name}")
 
     actual = set(zipfile.ZipFile(artifact).namelist())
 
