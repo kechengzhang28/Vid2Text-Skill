@@ -55,6 +55,8 @@ def transcribe(wav_path: Path) -> str:
             "-t", "4",
             "-l", "auto",
             "-itn",
+            "-nt",
+            "-np",
             str(wav_path),
         ],
         capture_output=True,
