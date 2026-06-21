@@ -28,16 +28,36 @@ jobs:
           cd SenseVoice.cpp
           git submodule update --init --recursive
 
+      - name: Patch i8mm bug in ggml
+        if: matrix.arch == 'darwin-arm64'
+        shell: bash
+        run: |
+          cd SenseVoice.cpp
+          python3 <<'PY'
+          path = 'sense-voice/csrc/third-party/ggml/src/ggml-cpu/arch/arm/quants.c'
+          with open(path) as f:
+              lines = f.readlines()
+          idxs = [i for i, l in enumerate(lines) if 'vmmlaq_s32' in l]
+          if idxs:
+              start, end = idxs[0], idxs[-1]
+              while start > 0 and lines[start - 1].rstrip().endswith('\\'):
+                  start -= 1
+              while end < len(lines) - 1 and lines[end].rstrip().endswith('\\'):
+                  end += 1
+              pad = lines[start][:len(lines[start]) - len(lines[start].lstrip())] if lines[start].strip() else ''
+              lines.insert(end + 1, pad + '#endif\n')
+              lines.insert(start, pad + '#if defined(__ARM_FEATURE_MATMUL_INT8)\n')
+              with open(path, 'w') as f:
+                  f.writelines(lines)
+              print(f'Patched lines {start + 1}-{end + 2}')
+          PY
+
       - name: Build sense-voice
         shell: bash
         run: |
           cd SenseVoice.cpp
           mkdir build && cd build
-          if [[ "${{ matrix.arch }}" == "darwin-arm64" ]]; then
-            cmake -DCMAKE_BUILD_TYPE=Release -DGGML_CPU_ARM_ARCH=armv8.5-a ..
-          else
-            cmake -DCMAKE_BUILD_TYPE=Release ..
-          fi
+          cmake -DCMAKE_BUILD_TYPE=Release ..
           cmake --build . --target sense-voice-main -j 4 --config Release
 
       - name: Collect binary
