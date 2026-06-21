@@ -35,12 +35,13 @@ jobs:
           if [[ "${{ matrix.arch }}" == "darwin-arm64" ]]; then
             cmake -DCMAKE_BUILD_TYPE=Release \
               -DBUILD_SHARED_LIBS=OFF \
+              -DGGML_NATIVE=OFF \
               -DCMAKE_C_FLAGS="-U__ARM_FEATURE_MATMUL_INT8" \
               -DCMAKE_CXX_FLAGS="-U__ARM_FEATURE_MATMUL_INT8" ..
           else
             cmake -DCMAKE_BUILD_TYPE=Release \
               -DBUILD_SHARED_LIBS=OFF \
-              -DGGML_AVX512=OFF ..
+              -DGGML_NATIVE=OFF ..
           fi
           cmake --build . --target sense-voice-main -j 4 --config Release
 
