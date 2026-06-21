@@ -50,3 +50,43 @@ def _get_audio_url(bvid: str, cid: int) -> str:
         return data["data"]["dash"]["audio"][0]["baseUrl"]
     except (KeyError, IndexError):
         raise NetworkError("未找到可用的音频流")
+
+
+from pathlib import Path
+
+
+def _download_to_file(url: str, dest: Path) -> None:
+    req = Request(url, headers=_HEADERS)
+    try:
+        with urlopen(req, timeout=120) as resp, open(dest, "wb") as f:
+            while True:
+                chunk = resp.read(64 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+    except URLError as e:
+        raise NetworkError(f"下载音频失败: {url}") from e
+
+
+def _download_bilibili(text: str, output_dir: Path) -> Path:
+    bvid = extract_bvid(text)
+    cid = _get_cid(bvid)
+    audio_url = _get_audio_url(bvid, cid)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dest = output_dir / f"{bvid}.m4a"
+    _download_to_file(audio_url, dest)
+    return dest
+
+
+_DOWNLOADERS = {
+    "bilibili": _download_bilibili,
+}
+
+
+def download(url: str, output_dir: Path) -> Path:
+    if _BV_RE.search(url):
+        return _download_bilibili(url, output_dir)
+    for keyword, handler in _DOWNLOADERS.items():
+        if keyword in url:
+            return handler(url, output_dir)
+    raise NetworkError(f"不支持的平台: {url}")
