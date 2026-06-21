@@ -28,6 +28,7 @@ jobs:
           git submodule update --init --recursive
 
       - name: Build sense-voice
+        shell: bash
         run: |
           cd SenseVoice.cpp
           mkdir build && cd build
