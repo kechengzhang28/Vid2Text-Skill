@@ -6,4 +6,3 @@ build/
 .coverage
 htmlcov/
 ~/.vid2text
-bin/

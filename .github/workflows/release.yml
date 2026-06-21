@@ -1,4 +1,4 @@
-name: Build and Release
+name: Package and Release
 
 on:
   push:
@@ -9,79 +9,13 @@ permissions:
   contents: write
 
 jobs:
-  compile-sensevoice:
-    name: Compile ${{ matrix.arch }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            arch: darwin-arm64
-          - os: ubuntu-latest
-            arch: linux-x64
-          - os: windows-latest
-            arch: win-x64
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Clone SenseVoice.cpp
-        run: |
-          git clone --depth 1 https://github.com/lovemefan/SenseVoice.cpp
-          cd SenseVoice.cpp
-          git submodule update --init --recursive
-
-      - name: Build sense-voice
-        shell: bash
-        run: |
-          cd SenseVoice.cpp
-          mkdir build && cd build
-          if [[ "${{ matrix.arch }}" == "darwin-arm64" ]]; then
-            cmake -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_C_FLAGS="-U__ARM_FEATURE_MATMUL_INT8" \
-              -DCMAKE_CXX_FLAGS="-U__ARM_FEATURE_MATMUL_INT8" ..
-          else
-            cmake -DCMAKE_BUILD_TYPE=Release ..
-          fi
-          cmake --build . --target sense-voice-main -j 4 --config Release
-
-      - name: Collect binary
-        shell: bash
-        run: |
-          BINARY=$(find SenseVoice.cpp/build -name 'sense-voice-main*' -type f | head -1)
-          if [[ "${{ matrix.arch }}" == "win-x64" ]]; then
-            cp "$BINARY" sense-voice.exe
-          else
-            cp "$BINARY" sense-voice
-            chmod +x sense-voice
-          fi
-          ls -lh sense-voice* || ls -lh
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sense-voice-${{ matrix.arch }}
-          path: sense-voice*
-
-  package-skill:
+  release:
     name: Package .skill
-    needs: compile-sensevoice
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
-
-      - name: Download compiled binaries
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Organize binaries
-        run: |
-          mkdir -p bin/darwin-arm64 bin/linux-x64 bin/win-x64
-          cp artifacts/sense-voice-darwin-arm64/sense-voice      bin/darwin-arm64/sense-voice
-          cp artifacts/sense-voice-linux-x64/sense-voice         bin/linux-x64/sense-voice
-          cp artifacts/sense-voice-win-x64/sense-voice.exe       bin/win-x64/sense-voice.exe
-          chmod +x bin/*/sense-voice
-          ls -lhR bin/
 
       - name: Build .skill artifact
         run: python3 scripts/build_skill.py
