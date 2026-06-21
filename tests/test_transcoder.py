@@ -6,12 +6,16 @@ from vid2text import transcoder
 from vid2text.errors import TranscodeError
 
 
-def test_resolve_ffmpeg_from_path(monkeypatch):
+def test_resolve_ffmpeg_from_path(monkeypatch, tmp_path):
+    monkeypatch.setattr(transcoder, "_detect_platform", lambda: "test")
+    monkeypatch.setattr(transcoder.Path, "exists", lambda self: False)
     monkeypatch.setattr(transcoder.shutil, "which", lambda name: "/usr/bin/ffmpeg")
     assert transcoder._resolve_ffmpeg() == "/usr/bin/ffmpeg"
 
 
 def test_resolve_ffmpeg_missing(monkeypatch):
+    monkeypatch.setattr(transcoder, "_detect_platform", lambda: "test")
+    monkeypatch.setattr(transcoder.Path, "exists", lambda self: False)
     monkeypatch.setattr(transcoder.shutil, "which", lambda name: None)
     monkeypatch.setattr(transcoder.sys, "frozen", False, raising=False)
     with pytest.raises(TranscodeError):
