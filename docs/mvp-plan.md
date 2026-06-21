@@ -4,9 +4,9 @@
 
 **Goal:** 用源码直接分发 `.skill` 技能包，再用真实 B站视频验证 `.skill` 产物能独立运行。
 
-**Architecture:** 将 `vid2text/` 源码 + `pyproject.toml` + `SKILL.md` 打包为 `dist/vid2text-{version}.skill`（zip 格式）。`scripts/build_skill.py` 执行打包，`scripts/e2e_test.py` 解压 `.skill` 到临时目录，执行 `pip install -e .` 后运行 `vid2text` 完成真实链路验证。
+**Architecture:** Python 层负责 B站下载和 ffmpeg 转码，ASR 推理通过 subprocess 调用预编译的 SenseVoice.cpp 二进制完成。`.skill` 产物包含 Python 源码、C 二进制、GGUF 模型，解压后 pip install 即可使用。
 
-**Tech Stack:** Python 3.10+、funasr_onnx、modelscope、click、ffmpeg、B站 Web API。
+**Tech Stack:** Python 3.10+、SenseVoice.cpp GGUF + C 二进制 subprocess 调用、click、ffmpeg、B站 Web API。
 
 ---
 
@@ -27,7 +27,7 @@
 **环境前提：**
 - Python >= 3.10。
 - 本机 PATH 中有 ffmpeg。
-- 首次真实运行会从 ModelScope 下载约 1.2GB 模型到 `~/.cache/modelscope/`。
+- 模型已内嵌于 .skill 产物中（174MB GGUF），无需额外下载
 - 网络可访问 B站 API 与 ModelScope。
 
 ---
@@ -36,6 +36,18 @@
 
 ```
 vid2text/                  # 已存在，MVP 实现
+├── __init__.py
+├── asr.py                 # SenseVoice.cpp 推理（subprocess 调用 C 二进制）
+├── cli.py
+├── downloader.py
+├── errors.py
+├── transcoder.py
+bin/                       # 预编译 C 二进制（按平台分包）
+├── darwin-arm64/sense-voice
+├── darwin-x64/sense-voice
+└── linux-x64/sense-voice
+models/                    # GGUF 模型
+└── sense-voice-small-q4_k.gguf
 scripts/                   # 新增
 ├── build_skill.py         # 把源码 + SKILL.md + pyproject.toml 打包成 .skill
 └── e2e_test.py            # 真实端到端测试（解压 .skill → pip install → vid2text）
@@ -49,13 +61,19 @@ README.md                  # 已存在，可同步更新
 vid2text-0.1.0.skill
 ├── SKILL.md
 ├── pyproject.toml
-└── vid2text/
-    ├── __init__.py
-    ├── cli.py
-    ├── downloader.py
-    ├── transcoder.py
-    ├── asr.py
-    └── errors.py
+├── vid2text/
+│   ├── __init__.py
+│   ├── asr.py
+│   ├── cli.py
+│   ├── downloader.py
+│   ├── errors.py
+│   └── transcoder.py
+├── bin/
+│   ├── darwin-arm64/sense-voice
+│   ├── darwin-x64/sense-voice
+│   └── linux-x64/sense-voice
+└── models/
+    └── sense-voice-small-q4_k.gguf
 ```
 
 ---

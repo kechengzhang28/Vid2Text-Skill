@@ -8,10 +8,7 @@ version = "0.1.0"
 description = "从 B站视频链接提取音频并转写为纯文本"
 requires-python = ">=3.10"
 dependencies = [
-    "funasr_onnx>=0.4",
-    "modelscope>=1.30",
     "click>=8.1",
-    "tqdm>=4.66",
 ]
 
 [project.scripts]

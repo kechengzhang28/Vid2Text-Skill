@@ -26,7 +26,7 @@ flowchart LR
 |----|------|
 | 音频下载 | urllib + B站 Web API（`x/web-interface/view`、`x/player/playurl`） |
 | 音频转码 | ffmpeg（内嵌，`-ar 16000 -ac 1 -f wav`） |
-| 语音识别 | funasr_onnx（Paraformer + FSMN-VAD + CT-Transformer Punc） |
+| 语音识别 | SenseVoice.cpp GGUF (Q4_K) + C 二进制 subprocess 调用 |
 | 模型下载 | ModelScope snapshot_download |
 | CLI 框架 | click |
 | 打包 | PyInstaller（`--onefile`，内嵌 ffmpeg） |
@@ -39,9 +39,8 @@ vid2text/
 ├── cli.py              # CLI 入口（click）
 ├── downloader.py       # B站 API 直连下载
 ├── transcoder.py       # ffmpeg 转码
-├── asr.py              # funasr_onnx 推理
-├── cache.py            # git 式内容寻址缓存
-└── config.py           # config.json 读写
+├── asr.py              # SenseVoice.cpp 推理（subprocess 调用 C 二进制）
+└── errors.py           # 异常类型定义
 ```
 
 ---
@@ -72,7 +71,7 @@ flowchart TD
 | CLI 入口 | `cli.py` | 参数解析、流程编排、退出码 | 命令行参数 | STDOUT / 退出码 |
 | 下载 | `downloader.py` | B站 API 直连下载 m4a | URL 或 BVID | 本地 m4a 文件路径 |
 | 转码 | `transcoder.py` | ffmpeg m4a → WAV | m4a 路径 | 16kHz 单声道 WAV 路径 |
-| ASR | `asr.py` | 模型加载、VAD+ASR+Punc 推理 | WAV 路径 | 纯文本字符串 |
+| ASR | `asr.py` | 模型加载、SenseVoiceSmall 推理（内置标点） | WAV 路径 | 纯文本字符串 |
 | 缓存 | `cache.py` | git 式内容寻址、index.json 管理 | 文件路径 + 文本 | 命中/未命中 + 淘汰 |
 | 配置 | `config.py` | config.json 读写、默认值回退 | — | 配置字典 |
 
@@ -299,82 +298,62 @@ ffmpeg -y -i input.m4a -vn -ar 16000 -ac 1 -f wav output.wav
 
 ---
 
-## 6. ASR 识别模块
+### 6. ASR 识别模块
 
-`asr.py` 集成 funasr_onnx 三模型套件，将 16kHz WAV 音频转为带标点纯文本。
+#### 架构
 
-### 模型清单
+Vid2Text 不直接链接任何深度学习库。ASR 推理通过 `subprocess` 调用预编译的 C 二进制 `sense-voice` 完成。二进制输出文本到 STDOUT，Python 层负责解析和剥离时间戳。
 
-| 模型 | ModelScope ID | Revision | 功能 |
-|------|--------------|----------|------|
-| Paraformer | `iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-onnx` | `v2.0.5` | 语音转文字 |
-| FSMN-VAD | `iic/speech_fsmn_vad_zh-cn-16k-common-onnx` | `v2.0.5` | 静音切分 |
-| CT-Transformer | `iic/punc_ct-transformer_zh-cn-common-vocab272727-onnx` | `v2.0.5` | 标点恢复 |
-
-### 模型下载
-
-通过 `modelscope.hub.snapshot_download(model_id, revision="v2.0.5")` 拉取。已存在则跳过。模型存储于 `~/.cache/modelscope/hub/models/{namespace}/{model_name}/`。
-
-### 模型加载流程
-
-```mermaid
-sequenceDiagram
-    participant CLI
-    participant ASR as asr.py
-    participant MS as ModelScope
-    participant ONNX as ONNX Runtime
-
-    CLI->>ASR: transcribe(wav_path)
-    ASR->>ASR: 检查全局单例
-    alt 模型未加载
-        ASR->>MS: snapshot_download (三模型)
-        MS-->>ASR: 模型目录
-        ASR->>ONNX: Paraformer(model_dir)
-        ASR->>ONNX: Fsmn_vad(model_dir)
-        ASR->>ONNX: CT_Transformer(model_dir)
-    end
-    ASR->>ASR: 推理
-    ASR-->>CLI: 返回文本
+```
+Python (asr.py)
+    │ subprocess.run(["sense-voice", "-m", "...", "audio.wav"])
+    ▼
+C 二进制 (sense-voice)
+    │ GGUF 模型加载 + Metal/CUDA 推理
+    ▼
+STDOUT: "[0.54-3.78] 甚至出现交易几乎停滞的情况。"
+    │ _parse_output(stdout) → 剥离时间戳
+    ▼
+"甚至出现交易几乎停滞的情况。"
 ```
 
-三模型使用全局单例，避免重复加载。加载参数：
+#### 模型
 
-- `batch_size=1`
-- `device_id=-1`（CPU）
-- `quantize=True`（优先使用 `model_quant.onnx`）
-- `intra_op_num_threads=8`
+| 模型 | 格式 | 大小 | 位置 |
+|------|------|------|------|
+| SenseVoice-Small Q4_K | GGUF | 174MB | `models/sense-voice-small-q4_k.gguf` |
 
-### 推理流程
+模型已内嵌于 `.skill` 产物中，不需要在线下载。
 
-```mermaid
-flowchart TD
-    A[WAV 文件] --> B[FSMN-VAD]
-    B --> C[语音段列表]
-    C --> D[Paraformer]
-    D --> E[无标点文本]
-    E --> F[CT-Transformer]
-    F --> G[带标点文本]
-    G --> H[写入文本缓存]
-    H --> I[返回字符串]
-```
+#### 二进制
 
-1. **VAD**：`Fsmn_vad(audio_path)` → 检测语音段
-2. **ASR**：`Paraformer([audio_path])` → 返回 `[{"preds": (text, tokens)}]`
-3. **Punc**：`CT_Transformer(raw_text)` → 返回 `(text_with_punc, punc_list)`
-4. 标点恢复后的文本写入文本缓存，同时作为函数返回值
+| 平台 | 路径 | 大小 |
+|------|------|------|
+| macOS arm64 | `bin/darwin-arm64/sense-voice` | ~300KB |
+| macOS x64 | `bin/darwin-x64/sense-voice` | ~300KB |
+| Linux x64 | `bin/linux-x64/sense-voice` | ~300KB |
+| Windows x64 | `bin/win-x64/sense-voice.exe` | ~300KB |
 
-### 线程数配置
+编译流程：`git clone → cmake → make`，从 [lovemefan/SenseVoice.cpp](https://github.com/lovemefan/SenseVoice.cpp) 源码编译。
 
-环境变量 `OMP_NUM_THREADS` 默认值 `8`，`FUNASR_DEVICE` 默认 `cpu`。ONNX Runtime CPU 推理使用 8 线程。未来如需 GPU 可设 `FUNASR_DEVICE=cuda:0`（需 `onnxruntime-gpu`）。
+#### 线程数配置
 
-### 错误处理
+二进制通过 `-t 4` 参数控制解码线程数。不使用环境变量。
 
-| 场景 | 行为 |
+#### 错误处理
+
+| 错误 | 异常 |
 |------|------|
-| 模型下载失败（网络） | `NetworkError`，退出码 2 |
-| 模型文件损坏 | `ModelError`，退出码 2，STDERR 含诊断 |
-| 推理异常（OOM） | `ModelError`，退出码 2 |
-| 输入文件不存在 | `FileNotFoundError` 向上传播 |
+| 二进制文件缺失 | `ModelError`，退出码 2 |
+| 模型文件缺失 | `ModelError`，退出码 2 |
+| ASR 推理失败 | `ModelError`，退出码 2 |
+| 不支持的平台 | `ModelError`，退出码 2 |
+
+#### 模块接口
+
+| 模块 | 文件 | 职责 | 输入 | 输出 |
+|------|------|------|------|------|
+| ASR | `asr.py` | subprocess 调用 sense-voice 二进制，解析输出 | WAV 路径 | 纯文本字符串 |
 
 ---
 
