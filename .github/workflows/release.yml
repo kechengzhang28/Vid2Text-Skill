@@ -14,8 +14,6 @@ jobs:
         include:
           - os: macos-latest
             arch: darwin-arm64
-          - os: macos-13
-            arch: darwin-x64
           - os: ubuntu-latest
             arch: linux-x64
           - os: windows-latest
@@ -75,9 +73,8 @@ jobs:
 
       - name: Organize binaries
         run: |
-          mkdir -p bin/darwin-arm64 bin/darwin-x64 bin/linux-x64 bin/win-x64
+          mkdir -p bin/darwin-arm64 bin/linux-x64 bin/win-x64
           cp artifacts/sense-voice-darwin-arm64/sense-voice      bin/darwin-arm64/sense-voice
-          cp artifacts/sense-voice-darwin-x64/sense-voice        bin/darwin-x64/sense-voice
           cp artifacts/sense-voice-linux-x64/sense-voice         bin/linux-x64/sense-voice
           cp artifacts/sense-voice-win-x64/sense-voice.exe       bin/win-x64/sense-voice.exe
           chmod +x bin/*/sense-voice
