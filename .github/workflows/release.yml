@@ -9,6 +9,7 @@ jobs:
   compile-sensevoice:
     name: Compile ${{ matrix.arch }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -33,7 +34,7 @@ jobs:
           cd SenseVoice.cpp
           mkdir build && cd build
           if [[ "${{ matrix.arch }}" == "darwin-arm64" ]]; then
-            cmake -DCMAKE_BUILD_TYPE=Release -DGGML_MACHINE_SUPPORTS_i8mm=OFF ..
+            cmake -DCMAKE_BUILD_TYPE=Release -DGGML_CPU_ARM_ARCH=armv8.5-a ..
           else
             cmake -DCMAKE_BUILD_TYPE=Release ..
           fi
