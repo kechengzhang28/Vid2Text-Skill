@@ -1,6 +1,7 @@
 ---
 name: vid2text
 description: 将 B站视频转写为纯文本。当用户提供 B站链接或 BV 号并请求转写时使用。
+version: "0.2.0"
 ---
 
 # Vid2Text
