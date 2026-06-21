@@ -25,11 +25,11 @@ flowchart LR
 | 层 | 技术 |
 |----|------|
 | 音频下载 | urllib + B站 Web API（`x/web-interface/view`、`x/player/playurl`） |
-| 音频转码 | ffmpeg（内嵌，`-ar 16000 -ac 1 -f wav`） |
+| 音频转码 | PyAV（`av` 库） |
 | 语音识别 | SenseVoice.cpp GGUF (Q4_K) + C 二进制 subprocess 调用 |
 | 模型下载 | ModelScope snapshot_download |
 | CLI 框架 | click |
-| 打包 | PyInstaller（`--onefile`，内嵌 ffmpeg） |
+| 打包 | build_skill.py 生成 .skill zip 产物 |
 
 ### 项目目录结构
 
@@ -38,7 +38,7 @@ vid2text/
 ├── __init__.py
 ├── cli.py              # CLI 入口（click）
 ├── downloader.py       # B站 API 直连下载
-├── transcoder.py       # ffmpeg 转码
+├── transcoder.py       # PyAV 转码
 ├── asr.py              # SenseVoice.cpp 推理（subprocess 调用 C 二进制）
 └── errors.py           # 异常类型定义
 ```
@@ -70,7 +70,7 @@ flowchart TD
 |------|------|------|------|------|
 | CLI 入口 | `cli.py` | 参数解析、流程编排、退出码 | 命令行参数 | STDOUT / 退出码 |
 | 下载 | `downloader.py` | B站 API 直连下载 m4a | URL 或 BVID | 本地 m4a 文件路径 |
-| 转码 | `transcoder.py` | ffmpeg m4a → WAV | m4a 路径 | 16kHz 单声道 WAV 路径 |
+| 转码 | `transcoder.py` | PyAV m4a → WAV | m4a 路径 | 16kHz 单声道 WAV 路径 |
 | ASR | `asr.py` | 模型加载、SenseVoiceSmall 推理（内置标点） | WAV 路径 | 纯文本字符串 |
 | 缓存 | `cache.py` | git 式内容寻址、index.json 管理 | 文件路径 + 文本 | 命中/未命中 + 淘汰 |
 | 配置 | `config.py` | config.json 读写、默认值回退 | — | 配置字典 |
@@ -152,7 +152,7 @@ vid2text = "vid2text.cli:main_entry"
 |----------|------|-----------|----------|
 | `UserError` | `Vid2TextError` | 1 | 无效链接、不含可识别的 BV 号 |
 | `NetworkError` | `Vid2TextError` | 2 | B站 API 请求失败、音频下载失败、模型下载失败 |
-| `TranscodeError` | `Vid2TextError` | 2 | ffmpeg 返回非零、输出文件未生成 |
+| `TranscodeError` | `Vid2TextError` | 2 | 转码失败 |
 | `ModelError` | `Vid2TextError` | 2 | 模型文件损坏、推理异常 |
 
 ### SHA256 哈希规范
@@ -261,40 +261,24 @@ _DOWNLOADERS: dict[str, Callable] = {
 
 ## 5. 转码模块
 
-`transcoder.py` 调用 ffmpeg 将音频转为 16kHz 单声道 WAV，供 ASR 模块消费。
+`transcoder.py` 使用 PyAV（`av`）将音频转为 16kHz 单声道 WAV，供 ASR 模块消费。
 
-### ffmpeg 命令
+### PyAV 转码
 
-```bash
-ffmpeg -y -i input.m4a -vn -ar 16000 -ac 1 -f wav output.wav
+```python
+import av
+
+container = av.open("input.m4a")
+# 解复用 → 重采样 (16kHz mono) → 编码为 PCM WAV
+output_stream = output_container.add_stream("pcm_s16le", rate=16000, layout="mono")
+resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=16000)
 ```
 
-| 参数 | 含义 |
-|------|------|
-| `-y` | 覆盖已存在的输出文件 |
-| `-i input.m4a` | 输入文件 |
-| `-vn` | 丢弃视频轨（纯音频） |
-| `-ar 16000` | 重采样到 16kHz |
-| `-ac 1` | 混音为单声道 |
-| `-f wav` | 输出 PCM WAV 格式 |
+`av` 通过 `pip install av` 自动安装，零系统依赖。
 
 ### 跳过转码
 
 输入已是 `.wav` 后缀时跳过转码，直接返回原路径。
-
-### ffmpeg 路径解析
-
-- 打包为 exe 后：从 `sys._MEIPASS / ffmpeg.exe` 获取
-- 开发环境：从 `shutil.which("ffmpeg")` 查找 PATH
-- 均失败：抛出 `TranscodeError`
-
-### 错误处理
-
-| 场景 | 行为 |
-|------|------|
-| 输入文件不存在 | `FileNotFoundError` 向上传播 |
-| ffmpeg 返回非零 | `TranscodeError`，STDERR 输出 ffmpeg 错误日志 |
-| 输出文件未生成 | `TranscodeError` |
 
 ---
 
@@ -473,109 +457,41 @@ STDOUT 始终是纯文本内容，Agent 无需解析或过滤。
 
 ## 9. 打包配置
 
-使用 PyInstaller 将项目打包为单文件 exe，内嵌 ffmpeg。
+使用 `scripts/build_skill.py` 将项目打包为 `.skill` zip 产物。
 
-### PyInstaller 命令
+### 产物内容
 
-```bash
-pyinstaller \
-  --onefile \
-  --name vid2text \
-  --add-binary "ffmpeg.exe;." \
-  --collect-all funasr_onnx \
-  --collect-all modelscope \
-  --hidden-import funasr_onnx.paraformer_bin \
-  --hidden-import funasr_onnx.vad_bin \
-  --hidden-import funasr_onnx.punc_bin \
-  --hidden-import onnxruntime \
-  --hidden-import onnxruntime.capi \
-  vid2text/cli.py
+```
+vid2text-{version}.skill
+├── SKILL.md
+├── pyproject.toml
+├── vid2text/
+│   └── *.py
+├── bin/
+│   ├── darwin-arm64/sense-voice
+│   ├── linux-x64/sense-voice
+│   └── win-x64/sense-voice.exe
+└── models/
+    └── sense-voice-small-q4_k.gguf
 ```
 
-### 参数说明
+### .skill 体积
 
-| 参数 | 含义 |
+| 组件 | 大小 |
 |------|------|
-| `--onefile` | 输出单文件 exe |
-| `--name vid2text` | 产物命名为 `vid2text.exe` |
-| `--add-binary "ffmpeg.exe;."` | 将 ffmpeg 打包进 exe 根目录 |
-| `--collect-all funasr_onnx` | 收集 funasr_onnx 所有模块和数据文件 |
-| `--collect-all modelscope` | 收集 modelscope 所有模块 |
-| `--hidden-import` | 显式声明 PyInstaller 可能遗漏的隐式导入 |
+| Python 源码 | ~30KB |
+| C 二进制 (3 平台) | ~3MB |
+| GGUF 模型 | 174MB |
+| **合计** | **~177MB** |
 
-### spec 文件
+### 安装方式
 
-推荐使用 `vid2text.spec` 固化配置，便于 CI 和可复现构建：
+- **开发**：`pip install -e .`
+- **发行**：GitHub Releases 下载 `.skill` 文件，解压后 `pip install -e .` 即可
 
-```python
-# vid2text.spec
-a = Analysis(
-    ["vid2text/cli.py"],
-    pathex=[],
-    binaries=[("ffmpeg.exe", ".")],
-    datas=[],
-    hiddenimports=[
-        "funasr_onnx.paraformer_bin",
-        "funasr_onnx.vad_bin",
-        "funasr_onnx.punc_bin",
-        "onnxruntime",
-        "onnxruntime.capi",
-    ],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    noarchive=False,
-)
-a.datas += Tree("funasr_onnx", prefix="funasr_onnx")
-a.datas += Tree("modelscope", prefix="modelscope")
+### 模型
 
-pyz = PYZ(a.pure)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name="vid2text",
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,
-)
-```
-
-构建命令：`pyinstaller vid2text.spec`
-
-### ffmpeg 路径解析规范
-
-- 打包模式（`sys.frozen`）：`sys._MEIPASS / ffmpeg.exe`
-- 开发模式：`shutil.which("ffmpeg")` 查找
-- 均失败：抛出 `TranscodeError`
-
-### exe 体积预估
-
-| 组件 | 体积 |
-|------|------|
-| Python 运行时 | ~30MB |
-| funasr_onnx + 依赖 | ~15MB |
-| modelscope | ~10MB |
-| onnxruntime | ~13MB |
-| click + tqdm | ~2MB |
-| ffmpeg.exe | ~80MB |
-| **合计** | **~150MB** |
-
-### 分发包
-
-打包产物：`dist/vid2text.exe`。通过 GitHub Releases 分发。用户双击或命令行运行，无需安装 Python 或任何依赖。
-
-### 模型首次下载
-
-模型文件（~1.2GB）不打包进 exe。用户首次运行时自动从 ModelScope 下载到 `~/.cache/modelscope/`。后续无需重新下载。
+模型文件（174MB GGUF）内嵌于 `.skill` 产物中，不需要在线下载。
 
 ---
 

@@ -4,9 +4,9 @@
 
 **Goal:** 用源码直接分发 `.skill` 技能包，再用真实 B站视频验证 `.skill` 产物能独立运行。
 
-**Architecture:** Python 层负责 B站下载和 ffmpeg 转码，ASR 推理通过 subprocess 调用预编译的 SenseVoice.cpp 二进制完成。`.skill` 产物包含 Python 源码、C 二进制、GGUF 模型，解压后 pip install 即可使用。
+**Architecture:** Python 层负责 B站下载和 PyAV 转码，ASR 推理通过 subprocess 调用预编译的 SenseVoice.cpp 二进制完成。`.skill` 产物包含 Python 源码、C 二进制、GGUF 模型，解压后 pip install 即可使用。
 
-**Tech Stack:** Python 3.10+、SenseVoice.cpp GGUF + C 二进制 subprocess 调用、click、ffmpeg、B站 Web API。
+**Tech Stack:** Python 3.10+、SenseVoice.cpp GGUF + C 二进制 subprocess 调用、click、PyAV、B站 Web API。
 
 ---
 
@@ -26,7 +26,6 @@
 
 **环境前提：**
 - Python >= 3.10。
-- 本机 PATH 中有 ffmpeg。
 - 模型已内嵌于 .skill 产物中（174MB GGUF），无需额外下载
 - 网络可访问 B站 API 与 ModelScope。
 
@@ -93,7 +92,7 @@ vid2text-0.1.0.skill
 **要求：**
 - 顶部 YAML frontmatter 包含 `name: "vid2text"` 和 `description`。
 - description 说明：B站视频转纯文本、基于 funasr_onnx、pip install 后使用。
-- 正文包含：能力描述、触发场景、**安装步骤**（`pip install -e .`）、先决条件（Python >= 3.10、ffmpeg）、命令格式、输出契约、退出码表、典型用法、约束。
+- 正文包含：能力描述、触发场景、**安装步骤**（`pip install -e .`）、先决条件（Python >= 3.10）、命令格式、输出契约、退出码表、典型用法、约束。
 - 典型用法命令示例直接调用 `vid2text <url>`。
 
 **验收：**
@@ -171,7 +170,7 @@ git commit -m "test: add e2e test script against real .skill artifact"
 - 记录退出码、STDOUT 前 2000 字符、STDERR 最后 2000 字符、转写文本长度。
 - 若失败，分析失败阶段：
   - pip install 失败 → 检查 pyproject.toml 依赖是否完整。
-  - ffmpeg 未找到 → 确认 ffmpeg 在 PATH 中。
+  - 下载/转码失败 → 检查 downloader/transcoder 逻辑。
   - B站 API/音频下载失败 → 检查 downloader 逻辑。
   - 模型下载/加载失败 → 检查 modelscope/funasr_onnx 相关导入。
   - ASR 推理失败 → 检查 asr.py 与模型兼容性。
@@ -189,7 +188,7 @@ git commit -m "test: add e2e test script against real .skill artifact"
 - Modify: `README.md`
 
 **要求：**
-- 精简为标题、用途、下载 `.skill` 后解压并 pip install 的示例、依赖（Python 3.10+、ffmpeg、首次模型下载）、License。
+- 精简为标题、用途、下载 `.skill` 后解压并 pip install 的示例、依赖（Python 3.10+）、License。
 - 不展开架构细节。
 
 **提交：**
