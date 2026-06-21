@@ -1,14 +1,16 @@
 ---
 name: vid2text
-description: 将 B站视频转写为纯文本。当用户提供 B站链接或 BV 号并请求转写时使用。
+description: 将B站视频转写为纯文本。当用户提供B站链接或 BV 号并请求转写时使用。
 compatibility: 需要 Python 3.10+ 和网络访问 B站 API
 metadata:
   version: "0.2.0"
 ---
 
+
+
 # Vid2Text
 
-一句命令将 B站视频音频转写为纯文本。底层 SenseVoice.cpp ASR，无需 API Key，无需配置。
+一句命令将B站视频音频转写为纯文本。底层 SenseVoice.cpp ASR，无需 API Key，无需配置。
 
 ## 安装
 
@@ -24,7 +26,7 @@ vid2text "<B站链接或BV号>"
 
 示例：`vid2text "https://www.bilibili.com/video/BV1MN4y177PB"`
 
-仅支持 B站。其他平台退出码 1。
+仅支持B站。其他平台退出码 1。
 
 ## 输出
 
