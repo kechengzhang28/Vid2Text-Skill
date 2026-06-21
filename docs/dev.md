@@ -330,7 +330,6 @@ STDOUT: "[0.54-3.78] 甚至出现交易几乎停滞的情况。"
 | 平台 | 路径 | 大小 |
 |------|------|------|
 | macOS arm64 | `bin/darwin-arm64/sense-voice` | ~300KB |
-| macOS x64 | `bin/darwin-x64/sense-voice` | ~300KB |
 | Linux x64 | `bin/linux-x64/sense-voice` | ~300KB |
 | Windows x64 | `bin/win-x64/sense-voice.exe` | ~300KB |
 

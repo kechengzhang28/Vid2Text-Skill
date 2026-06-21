@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from pathlib import Path
 
 import pytest
@@ -9,14 +9,7 @@ from vid2text.errors import ModelError
 
 def test_detect_arch_darwin_arm64(monkeypatch):
     monkeypatch.setattr(asr.sys, "platform", "darwin")
-    monkeypatch.setattr(asr.os, "uname", lambda: type("u", (), {"machine": "arm64"})())
     assert asr._detect_arch() == "darwin-arm64"
-
-
-def test_detect_arch_darwin_x64(monkeypatch):
-    monkeypatch.setattr(asr.sys, "platform", "darwin")
-    monkeypatch.setattr(asr.os, "uname", lambda: type("u", (), {"machine": "x86_64"})())
-    assert asr._detect_arch() == "darwin-x64"
 
 
 def test_detect_arch_linux(monkeypatch):

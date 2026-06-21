@@ -1,4 +1,3 @@
-import os
 import re
 import subprocess
 import sys
@@ -13,13 +12,12 @@ _MODEL_FILE = "sense-voice-small-q4_k.gguf"
 
 
 def _detect_arch() -> str:
-    machine = os.uname().machine
-    if sys.platform == "darwin":
-        return "darwin-arm64" if machine == "arm64" else "darwin-x64"
+    if sys.platform == "win32":
+        return "win-x64"
     elif sys.platform == "linux":
         return "linux-x64"
-    elif sys.platform == "win32":
-        return "win-x64"
+    elif sys.platform == "darwin":
+        return "darwin-arm64"
     else:
         raise ModelError(f"不支持的操作系统: {sys.platform}")
 

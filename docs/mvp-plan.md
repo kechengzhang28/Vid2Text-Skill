@@ -44,7 +44,6 @@ vid2text/                  # 已存在，MVP 实现
 ├── transcoder.py
 bin/                       # 预编译 C 二进制（按平台分包）
 ├── darwin-arm64/sense-voice
-├── darwin-x64/sense-voice
 └── linux-x64/sense-voice
 models/                    # GGUF 模型
 └── sense-voice-small-q4_k.gguf
@@ -70,7 +69,6 @@ vid2text-0.1.0.skill
 │   └── transcoder.py
 ├── bin/
 │   ├── darwin-arm64/sense-voice
-│   ├── darwin-x64/sense-voice
 │   └── linux-x64/sense-voice
 └── models/
     └── sense-voice-small-q4_k.gguf
