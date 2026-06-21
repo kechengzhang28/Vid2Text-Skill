@@ -1,7 +1,9 @@
 ---
 name: vid2text
 description: 将 B站视频转写为纯文本。当用户提供 B站链接或 BV 号并请求转写时使用。
-version: "0.2.0"
+compatibility: 需要 Python 3.10+ 和网络访问 B站 API
+metadata:
+  version: "0.2.0"
 ---
 
 # Vid2Text
@@ -29,7 +31,7 @@ vid2text "<B站链接或BV号>"
 - **STDOUT**：纯文本（带标点，无时间戳，无元信息）
 - **STDERR**：进度和错误信息（退出码非 0 时再读）
 
-流水线：URL → B站API下载(m4a) → ffmpeg(WAV) → ASR推理 → 纯文本，5分钟视频约 10-30 秒。
+流水线：URL → B站API下载(m4a) → PyAV(WAV) → ASR推理 → 纯文本，5分钟视频约 10-30 秒。
 
 ## 退出码
 
