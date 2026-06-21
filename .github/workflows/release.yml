@@ -25,3 +25,4 @@ jobs:
         with:
           files: dist/*.skill
           generate_release_notes: true
+          draft: true
