@@ -110,7 +110,7 @@ vid2text = "vid2text.cli:main_entry"
 
 ---
 
-## 3. 下载模块
+## 4. 下载模块
 
 `downloader.py` 负责从 B站 API 获取音频直链并下载到本地。
 
@@ -184,7 +184,7 @@ _DOWNLOADERS: dict[str, Callable] = {
 
 ---
 
-## 4. 转码模块
+## 5. 转码模块
 
 `transcoder.py` 使用 PyAV（`av`）将音频转为 16kHz 单声道 WAV，供 ASR 模块消费。
 
