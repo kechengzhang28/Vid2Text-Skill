@@ -126,7 +126,7 @@ sequenceDiagram
     DL->>DL: extract_bvid(url)
     DL->>API: GET /x/web-interface/view?bvid={bvid}
     API-->>DL: { data: { cid } }
-    DL->>API: GET /x/player/playurl?bvid={bvid}&cid={cid}&fnval=4048&fourk=1
+    DL->>API: GET /x/player/playurl?bvid={bvid}&cid={cid}&qn=0&fnval=4048&fourk=1
     API-->>DL: { data: { dash: { audio: [{ baseUrl }] } } }
     DL->>API: GET audio baseUrl
     API-->>DL: m4a 二进制流
@@ -265,7 +265,8 @@ sense-voice -m <model.gguf> -t 4 -l auto -itn -nt -np <audio.wav>
 
 ### 输出解析
 
-`_parse_output()` 函数处理两件事：
+命令行已传 `-nt` 请求二进制不输出时间戳，`_parse_output()` 作为防御性兜底：即便个别情况下二进制仍残留 `[时间戳]` 前缀或空行，也会被剥离合并。处理逻辑：
+
 1. 正则剥离每行开头的 `[时间戳]` 前缀
 2. 过滤空行后合并
 
@@ -348,15 +349,6 @@ vid2text.skill
 └── models/
     └── sense-voice-small-q4_k.gguf
 ```
-
-### .skill 体积
-
-| 组件 | 大小 |
-|------|------|
-| Python 源码 | ~30KB |
-| C 二进制 (3 平台) | ~900KB |
-| GGUF 模型 | 174MB |
-| **合计** | **~175MB** |
 
 ### 安装方式
 
