@@ -3,7 +3,7 @@ name: vid2text
 description: 将B站视频转写为纯文本。当用户提供B站链接或 BV 号并请求转写时使用。
 compatibility: 需要 Python 3.10+ 和网络访问 B站 API
 metadata:
-  version: "0.2.1"
+  version: "0.2.2"
 ---
 
 
@@ -14,19 +14,23 @@ metadata:
 
 ## 安装
 
-先检查是否已可运行，已装则跳过：
+不触发构建系统，直接安装运行时依赖（已安装则跳过）：
 
 ```bash
-python -c "import importlib.util,subprocess,sys; subprocess.check_call([sys.executable,'-m','pip','install','-e','.']) if importlib.util.find_spec('vid2text') is None else None"
+python -c "import click,av" 2>/dev/null || pip install click av
 ```
+
+注意：PowerShell 下 `||` 无效，需分别执行检查与安装。
 
 ## 用法
 
+在项目根目录（SKILL.md 所在目录）下执行：
+
 ```bash
-vid2text "<B站链接或BV号>"
+python -m vid2text.cli "<B站链接或BV号>"
 ```
 
-示例：`vid2text "https://www.bilibili.com/video/BV1MN4y177PB"`
+示例：`python -m vid2text.cli "https://www.bilibili.com/video/BV1MN4y177PB"`
 
 仅支持B站。其他平台退出码 1。
 
