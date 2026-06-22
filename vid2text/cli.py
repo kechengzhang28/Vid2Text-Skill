@@ -4,14 +4,21 @@ from pathlib import Path
 
 import click
 
-from . import asr, downloader, transcoder
+from . import __version__, asr, downloader, transcoder
 from .errors import Vid2TextError
 
 
 @click.command()
-@click.argument("url")
-def main_entry(url: str) -> None:
+@click.argument("url", required=False)
+@click.option("--version", "show_version", is_flag=True, default=False, help="显示版本")
+def main_entry(url: str, show_version: bool) -> None:
     """从 B站视频链接提取音频并转写为纯文本。"""
+    if show_version:
+        click.echo(f"vid2text {__version__}")
+        return
+    if not url:
+        click.echo("使用: vid2text <B站链接或BV号>", err=True)
+        sys.exit(1)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
