@@ -11,6 +11,11 @@ def test_help_shows_usage():
     assert "URL" in result.output
 
 
+def test_no_args_exits_one():
+    result = CliRunner().invoke(main_entry, [])
+    assert result.exit_code == 1
+
+
 def test_happy_path_outputs_text(monkeypatch):
     def fake_download(url, d):
         p = d / "a.m4a"

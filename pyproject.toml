@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vid2text"
-version = "0.2.0"
+version = "0.2.1"
 description = "从 B站视频链接提取音频并转写为纯文本"
 requires-python = ">=3.10"
 dependencies = [

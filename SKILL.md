@@ -3,7 +3,7 @@ name: vid2text
 description: 将B站视频转写为纯文本。当用户提供B站链接或 BV 号并请求转写时使用。
 compatibility: 需要 Python 3.10+ 和网络访问 B站 API
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 
@@ -17,7 +17,7 @@ metadata:
 先检查是否已可运行，已装则跳过：
 
 ```bash
-vid2text --version 2>/dev/null || pip install -e .
+python -c "import importlib.util,subprocess,sys; subprocess.check_call([sys.executable,'-m','pip','install','-e','.']) if importlib.util.find_spec('vid2text') is None else None"
 ```
 
 ## 用法
