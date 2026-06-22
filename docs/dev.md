@@ -2,7 +2,7 @@
 
 ## 1. 项目总览
 
-Vid2Text 从 B站视频链接提取音频，经 ONNX 语音识别输出纯文本转写结果。
+Vid2Text 从 B站视频链接提取音频，通过 SenseVoice.cpp GGUF 模型进行语音识别，输出纯文本转写结果。
 
 ### 完整流水线
 
@@ -13,11 +13,8 @@ flowchart LR
     C --> D[转码模块]
     D --> E[WAV 16kHz 单声道]
     E --> F[ASR 模块]
-    F --> G[VAD 切分]
-    G --> H[Paraformer 推理]
-    H --> I[CT-Transformer 标点]
-    I --> J[STDOUT]
-    I --> K[文本缓存]
+    F --> G[SenseVoice.cpp<br/>subprocess 调用]
+    G --> H[STDOUT]
 ```
 
 ### 技术栈
@@ -27,7 +24,6 @@ flowchart LR
 | 音频下载 | urllib + B站 Web API（`x/web-interface/view`、`x/player/playurl`） |
 | 音频转码 | PyAV（`av` 库） |
 | 语音识别 | SenseVoice.cpp GGUF (Q4_K) + C 二进制 subprocess 调用 |
-| 模型下载 | ModelScope snapshot_download |
 | CLI 框架 | click |
 | 打包 | build_skill.py 生成 .skill zip 产物 |
 
@@ -54,14 +50,11 @@ flowchart TD
     cli[cli.py] --> downloader[downloader.py]
     cli --> transcoder[transcoder.py]
     cli --> asr[asr.py]
-    cli --> cache[cache.py]
-    cli --> config[config.py]
+    cli --> errors[errors.py]
 
-    downloader --> cache
-    asr --> cache
-    asr --> config
-    downloader --> config
-    cache --> config
+    downloader --> errors
+    transcoder --> errors
+    asr --> errors
 ```
 
 ### 各模块职责
@@ -71,32 +64,27 @@ flowchart TD
 | CLI 入口 | `cli.py` | 参数解析、流程编排、退出码 | 命令行参数 | STDOUT / 退出码 |
 | 下载 | `downloader.py` | B站 API 直连下载 m4a | URL 或 BVID | 本地 m4a 文件路径 |
 | 转码 | `transcoder.py` | PyAV m4a → WAV | m4a 路径 | 16kHz 单声道 WAV 路径 |
-| ASR | `asr.py` | 模型加载、SenseVoiceSmall 推理（内置标点） | WAV 路径 | 纯文本字符串 |
-| 缓存 | `cache.py` | git 式内容寻址、index.json 管理 | 文件路径 + 文本 | 命中/未命中 + 淘汰 |
-| 配置 | `config.py` | config.json 读写、默认值回退 | — | 配置字典 |
+| ASR | `asr.py` | subprocess 调用 sense-voice 二进制，解析输出 | WAV 路径 | 纯文本字符串 |
+| 异常 | `errors.py` | 异常类型定义与 exit_code 映射 | — | 异常类 |
 
 ### 数据流
 
 ```mermaid
 flowchart LR
     subgraph CLI
-        A[parse args] --> B{缓存命中?}
+        A[parse args] --> B[download]
+        B --> C[m4a]
+        C --> D[transcode]
+        D --> E[wav]
+        E --> F[ASR: SenseVoice.cpp subprocess]
+        F --> G[文本]
+        G --> H[STDOUT]
     end
-    B -->|否| C[download]
-    C --> D[m4a]
-    D --> E[transcode]
-    E --> F[wav]
-    F --> G[ASR: VAD + Paraformer + Punc]
-    G --> H[文本]
-    H --> I[write cache]
-    I --> J[STDOUT]
-    B -->|是| K[read cache]
-    K --> J
 ```
 
 ### 进程模型
 
-单进程、同步执行。不使用线程或 async。流水线各阶段按序执行，前一步完成才进入下一步。
+单进程、同步执行。不使用线程或 async。流水线各阶段按序执行，前一步完成才进入下一步。使用 `tempfile.TemporaryDirectory()` 存放中间文件，进程退出后自动清理。
 
 ### 入口文件
 
@@ -109,68 +97,16 @@ vid2text = "vid2text.cli:main_entry"
 
 ---
 
-## 3. 关键数据结构
+## 3. 错误类型
 
-### index.json
-
-维护视频 ID 到缓存文件的映射。位于 `~/.vid2text/cache/index.json`。
-
-键格式：`"{platform}:{video_id}"`（如 `"bilibili:BV1wDEK6MEM2"`）。
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `audio` | `string` | 音频文件 SHA256 完整哈希（64 位 hex） |
-| `text` | `object` | 模型别名 → 文本文件 SHA256 完整哈希 |
-
-实际 JSON 示例：
-
-```json
-{
-  "bilibili:BV1wDEK6MEM2": {
-    "audio": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0",
-    "text": { "paraformer": "d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4d3e2b1a0" }
-  }
-}
-```
-
-### config.json
-
-技能级全局配置。位于 `~/.vid2text/config.json`，首次运行自动生成。每次启动时读取，读取失败使用内置默认值。当前仅含 `cache` 段，未来可扩展（模型选择、线程数等）。
-
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `cache.max_age_days` | `int` | `30` | 超期天数，超期条目视为未命中 |
-| `cache.max_total_mb` | `int` | `500` | objects 总容量上限 |
-
-读取规则：浅合并用户文件与默认值。文件不存在或 JSON 解析失败时返回默认值。
-
-### 错误类型
-
-所有错误继承基类，通过 `exit_code` 属性控制进程退出码。CLI 层捕获后取 `exit_code` 作为退出码，`str(e)` 输出到 STDERR。
+所有错误继承基类 `Vid2TextError`，通过 `exit_code` 属性控制进程退出码。CLI 层捕获后取 `exit_code` 作为退出码，`str(e)` 输出到 STDERR。
 
 | 错误类型 | 基类 | exit_code | 触发条件 |
 |----------|------|-----------|----------|
 | `UserError` | `Vid2TextError` | 1 | 无效链接、不含可识别的 BV 号 |
-| `NetworkError` | `Vid2TextError` | 2 | B站 API 请求失败、音频下载失败、模型下载失败 |
+| `NetworkError` | `Vid2TextError` | 2 | B站 API 请求失败、音频下载失败 |
 | `TranscodeError` | `Vid2TextError` | 2 | 转码失败 |
-| `ModelError` | `Vid2TextError` | 2 | 模型文件损坏、推理异常 |
-
-### SHA256 哈希规范
-
-- 输入为文件时：对文件内容（二进制流）计算 SHA256
-- 输入为字符串时：对 UTF-8 编码后的字节计算 SHA256
-- 输出：完整 64 位 hex 字符串，不截取
-- 用途：音频内容哈希、文本内容哈希均使用相同算法
-
-### objects/ 文件路径规则
-
-```
-{cache_dir}/objects/{sha256[:2]}/{sha256[2:]}.{ext}
-```
-
-- `sha256[:2]`：前 2 位 hex 为子目录名（防单目录文件数过多）
-- `sha256[2:]`：后 62 位 hex 为文件名
-- `ext`：`m4a`（音频）或 `txt`（文本）
+| `ModelError` | `Vid2TextError` | 2 | 模型文件损坏、推理异常、不支持的操作系统 |
 
 ---
 
@@ -185,22 +121,15 @@ sequenceDiagram
     participant CLI
     participant DL as downloader
     participant API as api.bilibili.com
-    participant Cache as cache
 
-    CLI->>DL: download(url, cache_dir)
+    CLI->>DL: download(url, output_dir)
     DL->>DL: extract_bvid(url)
-    DL->>Cache: 查 index.json
-    alt 音频缓存命中
-        Cache-->>DL: 返回音频路径
-        DL-->>CLI: 直接返回
-    end
     DL->>API: GET /x/web-interface/view?bvid={bvid}
     API-->>DL: { data: { cid } }
     DL->>API: GET /x/player/playurl?bvid={bvid}&cid={cid}&fnval=4048&fourk=1
     API-->>DL: { data: { dash: { audio: [{ baseUrl }] } } }
     DL->>API: GET audio baseUrl
     API-->>DL: m4a 二进制流
-    DL->>Cache: 写入 objects/ + 更新 index.json
     DL-->>CLI: 返回本地 m4a 路径
 ```
 
@@ -217,7 +146,7 @@ GET https://api.bilibili.com/x/web-interface/view?bvid={bvid}
 | `User-Agent` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36` |
 | `Referer` | `https://www.bilibili.com/` |
 
-**关键返回字段**：`data.cid`、`data.bvid`、`data.title`、`data.duration`。`code != 0` 时抛出 `NetworkError`。
+**关键返回字段**：`data.cid`。`code != 0` 时抛出 `NetworkError`。
 
 ### 步骤二：获取音频流地址
 
@@ -233,11 +162,11 @@ GET https://api.bilibili.com/x/player/playurl?bvid={bvid}&cid={cid}&qn=0&fnval=4
 | `fnval` | `4048` | 请求 DASH 流（含独立音频轨） |
 | `fourk` | `1` | 允许 4K |
 
-**关键返回字段**：`data.dash.audio[0].baseUrl`（音频直链）、`data.dash.audio[0].codecs`（编码格式，通常为 `mp4a.40.2`）。`audio` 数组为空时抛出 `NetworkError`。
+**关键返回字段**：`data.dash.audio[0].baseUrl`（音频直链）。`audio` 数组为空时抛出 `NetworkError`。
 
 ### 步骤三：下载音频
 
-对 `baseUrl` 发起 HTTP GET，请求头同步骤一。超时 120 秒。写入 `objects/` 目录后计算 SHA256 并更新 `index.json`。下载过程通过 tqdm 显示进度条。
+对 `baseUrl` 发起 HTTP GET，请求头同步骤一。读取超时 120 秒，API 请求超时 30 秒。分 64KB 块写入本地文件，文件名格式 `{bvid}.m4a`。
 
 ### BV 号提取
 
@@ -245,17 +174,13 @@ GET https://api.bilibili.com/x/player/playurl?bvid={bvid}&cid={cid}&qn=0&fnval=4
 
 ### 平台分派
 
-通过 URL 关键词匹配下载函数。M0 仅注册 `"bilibili"`。无匹配时抛出 `NetworkError`。
+通过 BV 正则或 URL 关键词匹配下载函数。当前仅注册 `"bilibili"`。无匹配时抛出 `NetworkError`。
 
 ```python
 _DOWNLOADERS: dict[str, Callable] = {
     "bilibili": _download_bilibili,
 }
 ```
-
-### 缓存集成
-
-下载前先查 `index.json` 中对应 `{platform}:{video_id}` 的条目。命中则直接返回 `objects/` 中的音频路径，跳过下载。
 
 ---
 
@@ -269,9 +194,13 @@ _DOWNLOADERS: dict[str, Callable] = {
 import av
 
 container = av.open("input.m4a")
-# 解复用 → 重采样 (16kHz mono) → 编码为 PCM WAV
+output_container = av.open("output.wav", "w")
 output_stream = output_container.add_stream("pcm_s16le", rate=16000, layout="mono")
-resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=16000)
+resampler = av.audio.resampler.AudioResampler(
+    format="s16",
+    layout="mono",
+    rate=16000,
+)
 ```
 
 `av` 通过 `pip install av` 自动安装，零系统依赖。
@@ -282,191 +211,136 @@ resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=
 
 ---
 
-### 6. ASR 识别模块
+## 6. ASR 识别模块
 
-#### 架构
+### 架构
 
-Vid2Text 不直接链接任何深度学习库。ASR 推理通过 `subprocess` 调用预编译的 C 二进制 `sense-voice` 完成。二进制输出文本到 STDOUT，Python 层负责解析和剥离时间戳。
+Vid2Text 不直接链接任何深度学习库。ASR 推理通过 `subprocess` 调用预编译的 C 二进制 `sense-voice` 完成。二进制输出带时间戳的文本到 STDOUT，Python 层负责解析和剥离时间戳。
 
 ```
 Python (asr.py)
-    │ subprocess.run(["sense-voice", "-m", "...", "audio.wav"])
+    │ subprocess.run(["sense-voice", "-m", "...", "-t", "4", "...", "audio.wav"])
     ▼
 C 二进制 (sense-voice)
-    │ GGUF 模型加载 + Metal/CUDA 推理
+    │ GGUF 模型加载 + CPU 推理
     ▼
 STDOUT: "[0.54-3.78] 甚至出现交易几乎停滞的情况。"
-    │ _parse_output(stdout) → 剥离时间戳
+    │ _parse_output(stdout) → 剥离时间戳，合并空行
     ▼
 "甚至出现交易几乎停滞的情况。"
 ```
 
-#### 模型
+### 模型
 
 | 模型 | 格式 | 大小 | 位置 |
 |------|------|------|------|
 | SenseVoice-Small Q4_K | GGUF | 174MB | `models/sense-voice-small-q4_k.gguf` |
 
-模型已内嵌于 `.skill` 产物中，不需要在线下载。
+模型已内嵌于项目中，不需要在线下载。
 
-#### 二进制
+### 二进制
 
-| 平台 | 路径 | 大小 |
+| 平台 | 路径 | 名称 |
 |------|------|------|
-| macOS arm64 | `bin/darwin-arm64/sense-voice` | ~300KB |
-| Linux x64 | `bin/linux-x64/sense-voice` | ~300KB |
-| Windows x64 | `bin/win-x64/sense-voice.exe` | ~300KB |
+| macOS arm64 | `bin/darwin-arm64/` | `sense-voice` |
+| Linux x64 | `bin/linux-x64/` | `sense-voice` |
+| Windows x64 | `bin/win-x64/` | `sense-voice.exe` |
 
 编译流程：`git clone → cmake -DBUILD_SHARED_LIBS=OFF → make`，从 [lovemefan/SenseVoice.cpp](https://github.com/lovemefan/SenseVoice.cpp) 源码静态编译。
 
-#### 线程数配置
+### 命令行参数
 
-二进制通过 `-t 4` 参数控制解码线程数。不使用环境变量。
+```bash
+sense-voice -m <model.gguf> -t 4 -l auto -itn -nt -np <audio.wav>
+```
 
-#### 错误处理
+| 参数 | 含义 |
+|------|------|
+| `-m` | 模型文件路径 |
+| `-t 4` | 解码线程数 |
+| `-l auto` | 自动检测语言 |
+| `-itn` | 启用逆文本正则化（数字、标点规范化） |
+| `-nt` | 不打印时间戳 |
+| `-np` | 不打印处理进度信息 |
+
+### 输出解析
+
+`_parse_output()` 函数处理两件事：
+1. 正则剥离每行开头的 `[时间戳]` 前缀
+2. 过滤空行后合并
+
+### 错误处理
 
 | 错误 | 异常 |
 |------|------|
 | 二进制文件缺失 | `ModelError`，退出码 2 |
 | 模型文件缺失 | `ModelError`，退出码 2 |
-| ASR 推理失败 | `ModelError`，退出码 2 |
-| 不支持的平台 | `ModelError`，退出码 2 |
-
-#### 模块接口
-
-| 模块 | 文件 | 职责 | 输入 | 输出 |
-|------|------|------|------|------|
-| ASR | `asr.py` | subprocess 调用 sense-voice 二进制，解析输出 | WAV 路径 | 纯文本字符串 |
+| ASR 推理失败（returncode != 0） | `ModelError`，退出码 2 |
+| 不支持的操作系统 | `ModelError`，退出码 2 |
 
 ---
 
-## 7. 缓存模块
-
-`cache.py` 实现 git 式内容寻址缓存，通过 `index.json` 维护映射，支持时间和空间双维度自动淘汰。
-
-### 目录结构
-
-```
-~/.vid2text/cache/
-├── objects/
-│   ├── a1/b2c3d4...m4a     # 音频
-│   └── d6/c5b4a3...txt     # 文本
-└── index.json               # 映射表
-```
-
-### index.json 原子写入
-
-写入时先写临时文件 `index.tmp`，完成后 `os.replace` 覆盖原文件。防止写入中断导致 index 损坏。读取失败（文件不存在或 JSON 解析错误）返回空字典 `{}`。
-
-### object 文件操作契约
-
-| 操作 | 输入 | 行为 | 失败时 |
-|------|------|------|--------|
-| **write** | `hash_hex` + 文件路径或字符串 + 扩展名 | 复制文件或写入字符串到 `objects/{h[:2]}/{h[2:]}.{ext}` | 静默降级（磁盘满等不中断主流程） |
-| **read** | `hash_hex` + 扩展名 | 读取并返回文件内容 | 视为未命中 |
-| **exists** | `hash_hex` + 扩展名 | 返回文件是否存在 | 视为不存在 |
-
-### 时间淘汰
-
-读取缓存前执行。遍历 `index.json` 所有条目，对每个条目取音频文件 mtime。超过 `max_age_days` 的条目从 `index.json` 删除，同时删除对应的 `objects/` 文件（音频 + 文本）。当文件已被手动删除但 index 残留时，同步清理 index（僵尸条目清理）。
-
-### 空间淘汰
-
-写入缓存后执行。统计 `objects/` 目录总大小。超过 `max_total_mb` 时，按条目中最旧文件的 mtime 排序，从最旧条目开始逐一删除（删除 `objects/` 文件并从 `index.json` 移除），直到总量 ≤ 限额。极端情况下（仅当前文件就超限且无其他条目可删），当前文件保留，不做进一步处理。
-
-### cache list
-
-遍历 `index.json`，按 key 排序输出。格式：
-
-```
-bilibili:BV1wDEK6MEM2
-  audio: a1b2c3d4e5f6a7b8...
-  text/paraformer: d6c5b4a3f2e1d0c9...
-```
-
-### cache clear
-
-删除 `objects/` 目录，将 `index.json` 重置为 `{}`。模型文件不受影响。
-
-### 错误处理
-
-| 场景 | 行为 |
-|------|------|
-| `index.json` 不存在 | 返回 `{}`，视为空缓存 |
-| `index.json` 损坏 | 返回 `{}`，旧索引丢失 |
-| object 文件缺失（index 有记录） | 视为未命中，运行时清理僵尸条目 |
-| 磁盘满（写入失败） | 静默降级，缓存写入失败不中断主流程 |
-
----
-
-## 8. CLI 入口
+## 7. CLI 入口
 
 `cli.py` 是唯一命令行入口，基于 click 框架。
 
 ### 命令结构
 
-```mermaid
-flowchart TD
-    main[vid2text] --> transcribe["默认命令: url 或 bvid"]
-    main --> cache[子命令组: cache]
-    cache --> cache_list[cache list]
-    cache --> cache_clear[cache clear]
-```
-
-### 命令格式
+单一命令，无子命令组：
 
 ```
-vid2text <url|bvid> [--no-cache]
-vid2text cache list
-vid2text cache clear
+vid2text <url|bvid>
+vid2text --version
 ```
 
 ### `vid2text <url|bvid>`
 
-位置参数接受完整 B站链接或纯 BV 号。`--no-cache` 彻底重跑：不读缓存、不写缓存、重新下载和推理。
+位置参数接受完整 B站链接或纯 BV 号。执行完整流水线：下载 → 转码 → ASR 推理 → 输出文本。
 
-### `vid2text cache list`
+使用 `tempfile.TemporaryDirectory()` 作为工作目录，所有中间文件在进程退出时自动清理。
 
-遍历 `index.json`，输出所有缓存条目。无条目时输出 `(空)`。
+### `vid2text --version`
 
-### `vid2text cache clear`
-
-清空 `objects/` 目录，重置 `index.json` 为 `{}`。不删除模型文件。
+输出版本号，不做任何处理。
 
 ### 退出码
 
 | 退出码 | 含义 | Agent 处置 |
 |--------|------|------------|
 | 0 | 成功 | 读取 STDOUT |
-| 1 | 用户错误 | 修正输入后重试 |
-| 2 | 系统错误 | 检查环境或报用户 |
+| 1 | 用户错误（无效链接、无 BV 号、缺少参数） | 修正输入后重试 |
+| 2 | 系统错误（网络、转码、ASR 推理失败） | 检查环境或报用户 |
 
 ### STDOUT / STDERR 分工
 
 | 输出内容 | 通道 |
 |----------|------|
 | 转写文本 | STDOUT |
-| cache list 输出 | STDOUT |
-| 进度条（tqdm） | STDERR |
+| 版本信息 | STDOUT |
+| 使用提示（无参数时） | STDERR |
 | 错误信息 | STDERR |
-| 状态提示（下载完成等） | STDERR |
 
 STDOUT 始终是纯文本内容，Agent 无需解析或过滤。
 
 ---
 
-## 9. 打包配置
+## 8. 打包配置
 
 使用 `scripts/build_skill.py` 将项目打包为 `.skill` zip 产物。
 
 ### 产物内容
 
 ```
-vid2text-{version}.skill
+vid2text.skill
 ├── SKILL.md
 ├── pyproject.toml
 ├── vid2text/
-│   └── *.py
+│   ├── __init__.py
+│   ├── asr.py
+│   ├── cli.py
+│   ├── downloader.py
+│   ├── errors.py
+│   └── transcoder.py
 ├── bin/
 │   ├── darwin-arm64/sense-voice
 │   ├── linux-x64/sense-voice
@@ -480,9 +354,9 @@ vid2text-{version}.skill
 | 组件 | 大小 |
 |------|------|
 | Python 源码 | ~30KB |
-| C 二进制 (3 平台) | ~3MB |
+| C 二进制 (3 平台) | ~900KB |
 | GGUF 模型 | 174MB |
-| **合计** | **~177MB** |
+| **合计** | **~175MB** |
 
 ### 安装方式
 
@@ -492,7 +366,3 @@ vid2text-{version}.skill
 ### 模型
 
 模型文件（174MB GGUF）内嵌于 `.skill` 产物中，不需要在线下载。
-
----
-
-> **相关文档**：[PRD](prd.md) — 产品需求文档
