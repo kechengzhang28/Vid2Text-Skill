@@ -14,8 +14,10 @@ metadata:
 
 ## 安装
 
+先检查是否已可运行，已装则跳过：
+
 ```bash
-pip install -e .
+vid2text --version 2>/dev/null || pip install -e .
 ```
 
 ## 用法
