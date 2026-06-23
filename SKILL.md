@@ -32,7 +32,7 @@ python -m vid2text.cli "<B站链接或BV号>"
 
 示例：`python -m vid2text.cli "https://www.bilibili.com/video/BV1MN4y177PB"`
 
-仅支持B站。其他平台退出码 1。
+仅支持B站。其他平台退出码 2。
 
 ## 输出
 
@@ -46,5 +46,5 @@ python -m vid2text.cli "<B站链接或BV号>"
 | 码 | 含义 | Agent 行动 |
 |----|------|-----------|
 | 0 | 成功 | 读 STDOUT |
-| 1 | 无效链接/不支持的平台 | 告知用户链接无效 |
-| 2 | 网络/系统/ASR错误 | 报告错误信息给用户 |
+| 1 | 无效链接 | 告知用户链接无效 |
+| 2 | 不支持的平台/网络/系统/ASR错误 | 报告错误信息给用户 |
