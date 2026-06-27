@@ -27,10 +27,10 @@ python -c "import click,av" 2>/dev/null || pip install click av
 在项目根目录（SKILL.md 所在目录）下执行：
 
 ```bash
-python -m vid2text.cli "<B站链接或BV号>"
+PYTHONDONTWRITEBYTECODE=1 python -m vid2text.cli "<B站链接或BV号>"
 ```
 
-示例：`python -m vid2text.cli "https://www.bilibili.com/video/BV1MN4y177PB"`
+示例：`PYTHONDONTWRITEBYTECODE=1 python -m vid2text.cli "https://www.bilibili.com/video/BV1MN4y177PB"`
 
 仅支持B站。其他平台退出码 2。
 

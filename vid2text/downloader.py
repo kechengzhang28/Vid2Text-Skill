@@ -1,5 +1,6 @@
 import re
 import json
+import ssl
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -21,11 +22,17 @@ _HEADERS = {
     "Referer": "https://www.bilibili.com/",
 }
 
+try:
+    import certifi
+    _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    _SSL_CONTEXT = ssl.create_default_context()
+
 
 def _api_get(url: str) -> dict:
     req = Request(url, headers=_HEADERS)
     try:
-        with urlopen(req, timeout=30) as resp:
+        with urlopen(req, timeout=30, context=_SSL_CONTEXT) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except URLError as e:
         raise NetworkError(f"请求 B站 API 失败: {url}") from e
@@ -58,7 +65,7 @@ from pathlib import Path
 def _download_to_file(url: str, dest: Path) -> None:
     req = Request(url, headers=_HEADERS)
     try:
-        with urlopen(req, timeout=120) as resp, open(dest, "wb") as f:
+        with urlopen(req, timeout=120, context=_SSL_CONTEXT) as resp, open(dest, "wb") as f:
             while True:
                 chunk = resp.read(64 * 1024)
                 if not chunk:
