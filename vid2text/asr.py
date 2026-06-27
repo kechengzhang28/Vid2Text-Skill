@@ -61,6 +61,7 @@ def transcribe(wav_path: Path) -> str:
         ],
         capture_output=True,
         text=True,
+        cwd=str(wav_path.parent),
     )
 
     if result.returncode != 0:
