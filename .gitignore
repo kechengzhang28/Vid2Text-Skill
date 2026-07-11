@@ -7,3 +7,4 @@ build/
 htmlcov/
 ~/.vid2text
 fbank_lfr_cmvn_feature.json
+.DS_Store

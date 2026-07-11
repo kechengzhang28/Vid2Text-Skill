@@ -3,7 +3,7 @@ name: vid2text
 description: 将B站视频转写为纯文本。当用户提供B站链接或 BV 号并请求转写时使用。
 compatibility: 需要 Python 3.10+ 和网络访问 B站 API
 metadata:
-  version: "0.2.2"
+  version: "0.2.3"
 ---
 
 
@@ -27,12 +27,12 @@ python -c "import click,av" 2>/dev/null || pip install click av
 在项目根目录（SKILL.md 所在目录）下执行：
 
 ```bash
-python -m vid2text.cli "<B站链接或BV号>"
+PYTHONDONTWRITEBYTECODE=1 python -m vid2text.cli "<B站链接或BV号>"
 ```
 
-示例：`python -m vid2text.cli "https://www.bilibili.com/video/BV1MN4y177PB"`
+示例：`PYTHONDONTWRITEBYTECODE=1 python -m vid2text.cli "https://www.bilibili.com/video/BV1MN4y177PB"`
 
-仅支持B站。其他平台退出码 1。
+仅支持B站。其他平台退出码 2。
 
 ## 输出
 
@@ -46,5 +46,5 @@ python -m vid2text.cli "<B站链接或BV号>"
 | 码 | 含义 | Agent 行动 |
 |----|------|-----------|
 | 0 | 成功 | 读 STDOUT |
-| 1 | 无效链接/不支持的平台 | 告知用户链接无效 |
-| 2 | 网络/系统/ASR错误 | 报告错误信息给用户 |
+| 1 | 无效链接 | 告知用户链接无效 |
+| 2 | 不支持的平台/网络/系统/ASR错误 | 报告错误信息给用户 |

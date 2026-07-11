@@ -57,10 +57,16 @@ def transcribe(wav_path: Path) -> str:
             "-itn",
             "-nt",
             "-np",
+            "-ng",
+            "-mc", "500",
+            "-ml", "2000",
+            "-sow",
+            "-et", "2.6",
             str(wav_path),
         ],
         capture_output=True,
         text=True,
+        cwd=str(wav_path.parent),
     )
 
     if result.returncode != 0:
